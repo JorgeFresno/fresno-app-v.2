@@ -10,7 +10,12 @@ export default function () {
       </div>
 
       <div class="screen-body">
-        <div id="movimientos-list"></div>
+        <div id="movimientos-list">
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            Cargando movimientos...
+          </div>
+        </div>
       </div>
     </section>
   `;
@@ -20,16 +25,16 @@ async function loadMovimientos() {
   const container = document.getElementById('movimientos-list');
   if (!container) return;
 
-  container.innerHTML = `<div class="loading-state">Cargando movimientos...</div>`;
-
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({ accion: 'getMovimientos' })
+    const url = `${API_URL}?accion=getMovimientos&_=${Date.now()}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store'
     });
 
-    const data = await response.json();
-    const rows = data?.data || [];
+    const payload = await response.json();
+    const rows = Array.isArray(payload?.data) ? payload.data : [];
 
     if (!rows.length) {
       container.innerHTML = `<div class="empty-state">Sin movimientos</div>`;
@@ -37,48 +42,47 @@ async function loadMovimientos() {
     }
 
     container.innerHTML = rows.map(renderMovimiento).join('');
-
   } catch (err) {
     container.innerHTML = `<div class="empty-state">Error cargando movimientos</div>`;
   }
 }
 
 function renderMovimiento(mov) {
-  const tipo = mov.TipoMov || '';
-  const folio = mov.FolioMov || '';
-  const desc = mov.Descripcion || mov.ClaveProducto || '';
+  const tipo = String(mov.TipoMov || '').trim();
+  const folio = String(mov.FolioMov || '').trim();
+  const desc = String(mov.Descripcion || mov.ClaveProducto || '').trim();
+  const estado = String(mov.Estado || '').trim();
   const fecha = mov.FechaMov || '';
   const pz = Number(mov.CantidadPz || 0);
   const kg = Number(mov.CantidadKg || 0);
-  const estado = mov.Estado || '';
 
-  const isEntrada = tipo.toLowerCase().includes('entrada');
+  const esEntrada = tipo.toLowerCase().includes('entrada');
+  const esCancelado = estado === 'Cancelado';
 
-  const icon = isEntrada ? '⬇️' : '⬆️';
-  const qtyClass = isEntrada ? 'positive' : 'negative';
+  const icono = esEntrada ? '⬇️' : '⬆️';
+  const qtyClass = esEntrada ? 'positive' : 'negative';
 
-  const cantidad = pz
-    ? `${pz} pz`
-    : kg
-    ? `${kg} kg`
-    : '';
+  let cantidad = '';
+  if (pz && kg) cantidad = `${pz} pz · ${kg} kg`;
+  else if (pz) cantidad = `${pz} pz`;
+  else if (kg) cantidad = `${kg} kg`;
 
   return `
     <div class="mov-item">
-      <div class="mov-icon-wrap">${icon}</div>
+      <div class="mov-icon-wrap">${icono}</div>
 
       <div class="mov-body">
-        <div class="mov-folio">${folio}</div>
-        <div class="mov-detail ${estado === 'Cancelado' ? 'cancelled' : ''}">
-          ${desc}
+        <div class="mov-folio">${escapeHtml(folio || 'Sin folio')}</div>
+        <div class="mov-detail ${esCancelado ? 'cancelled' : ''}">
+          ${escapeHtml(desc || tipo || 'Sin descripción')}
         </div>
       </div>
 
       <div class="mov-amount">
         <div class="mov-qty ${qtyClass}">
-          ${cantidad}
+          ${escapeHtml(cantidad)}
         </div>
-        <div class="mov-time">${formatearFecha(fecha)}</div>
+        <div class="mov-time">${escapeHtml(formatearFecha(fecha))}</div>
       </div>
     </div>
   `;
@@ -86,9 +90,9 @@ function renderMovimiento(mov) {
 
 function formatearFecha(fecha) {
   if (!fecha) return '';
-
   try {
     const d = new Date(fecha);
+    if (isNaN(d.getTime())) return String(fecha);
     return d.toLocaleString('es-MX', {
       day: '2-digit',
       month: '2-digit',
@@ -96,6 +100,15 @@ function formatearFecha(fecha) {
       minute: '2-digit'
     });
   } catch {
-    return fecha;
+    return String(fecha);
   }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }

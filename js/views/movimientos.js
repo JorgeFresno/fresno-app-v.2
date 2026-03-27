@@ -26,7 +26,12 @@ async function loadMovimientos() {
   if (!statusEl || !outputEl) return;
 
   try {
-    const response = await fetch(API_URL + '?accion=getMovimientos');
+    const response = await fetch(API_URL, {
+  method: 'POST',
+  body: JSON.stringify({
+    accion: 'getMovimientos'
+  })
+});
     const text = await response.text();
 
     let data;

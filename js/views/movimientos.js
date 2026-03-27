@@ -11,10 +11,7 @@ export default function () {
 
       <div class="screen-body">
         <div id="movimientos-list">
-          <div class="loading-state">
-            <div class="loading-spinner"></div>
-            Cargando movimientos...
-          </div>
+          <div class="loading-state">Cargando movimientos...</div>
         </div>
       </div>
     </section>
@@ -26,15 +23,10 @@ async function loadMovimientos() {
   if (!container) return;
 
   try {
-    const url = `${API_URL}?accion=getMovimientos&_=${Date.now()}`;
+    const response = await fetch(API_URL + '?accion=getMovimientos&_=' + Date.now());
+    const json = await response.json();
 
-    const response = await fetch(url, {
-      method: 'GET',
-      cache: 'no-store'
-    });
-
-    const payload = await response.json();
-    const rows = Array.isArray(payload?.data) ? payload.data : [];
+    const rows = Array.isArray(json.data) ? json.data : [];
 
     if (!rows.length) {
       container.innerHTML = `<div class="empty-state">Sin movimientos</div>`;
@@ -42,73 +34,48 @@ async function loadMovimientos() {
     }
 
     container.innerHTML = rows.map(renderMovimiento).join('');
-  } catch (err) {
+
+  } catch (e) {
     container.innerHTML = `<div class="empty-state">Error cargando movimientos</div>`;
   }
 }
 
-function renderMovimiento(mov) {
-  const tipo = String(mov.TipoMov || '').trim();
-  const folio = String(mov.FolioMov || '').trim();
-  const desc = String(mov.Descripcion || mov.ClaveProducto || '').trim();
-  const estado = String(mov.Estado || '').trim();
-  const fecha = mov.FechaMov || '';
-  const pz = Number(mov.CantidadPz || 0);
-  const kg = Number(mov.CantidadKg || 0);
+function renderMovimiento(m) {
+  const entrada = (m.TipoMov || '').toLowerCase().includes('entrada');
 
-  const esEntrada = tipo.toLowerCase().includes('entrada');
-  const esCancelado = estado === 'Cancelado';
+  const icon = entrada ? '⬇️' : '⬆️';
+  const qtyClass = entrada ? 'positive' : 'negative';
 
-  const icono = esEntrada ? '⬇️' : '⬆️';
-  const qtyClass = esEntrada ? 'positive' : 'negative';
-
-  let cantidad = '';
-  if (pz && kg) cantidad = `${pz} pz · ${kg} kg`;
-  else if (pz) cantidad = `${pz} pz`;
-  else if (kg) cantidad = `${kg} kg`;
+  const cantidad =
+    m.CantidadPz ? `${m.CantidadPz} pz` :
+    m.CantidadKg ? `${m.CantidadKg} kg` : '';
 
   return `
     <div class="mov-item">
-      <div class="mov-icon-wrap">${icono}</div>
+      <div class="mov-icon-wrap">${icon}</div>
 
       <div class="mov-body">
-        <div class="mov-folio">${escapeHtml(folio || 'Sin folio')}</div>
-        <div class="mov-detail ${esCancelado ? 'cancelled' : ''}">
-          ${escapeHtml(desc || tipo || 'Sin descripción')}
-        </div>
+        <div class="mov-folio">${m.FolioMov || ''}</div>
+        <div class="mov-detail">${m.Descripcion || m.ClaveProducto || ''}</div>
       </div>
 
       <div class="mov-amount">
-        <div class="mov-qty ${qtyClass}">
-          ${escapeHtml(cantidad)}
-        </div>
-        <div class="mov-time">${escapeHtml(formatearFecha(fecha))}</div>
+        <div class="mov-qty ${qtyClass}">${cantidad}</div>
+        <div class="mov-time">${formatear(m.FechaMov)}</div>
       </div>
     </div>
   `;
 }
 
-function formatearFecha(fecha) {
-  if (!fecha) return '';
-  try {
-    const d = new Date(fecha);
-    if (isNaN(d.getTime())) return String(fecha);
-    return d.toLocaleString('es-MX', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch {
-    return String(fecha);
-  }
-}
+function formatear(f) {
+  if (!f) return '';
+  const d = new Date(f);
+  if (isNaN(d)) return f;
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  return d.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
